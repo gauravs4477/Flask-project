@@ -1,0 +1,144 @@
+from flask import Flask,render_template,request
+import requests
+from datetime import datetime,timedelta
+
+app = Flask(__name__,template_folder='Templates')
+# res2 = []
+
+@app.route("/",methods=["GET","POST"])
+def dashboard():
+    traffic=51
+    msg = "In DayTime no arrangement can be done."
+    labels=['LED1','LED2','LED3','LED4','LED5']
+    colors = ['#ff0000', '#0000ff', '#ffffe0', '#FFA500','#808080']
+    den = "Traffic Density is Low"
+    bright = "Default Brightness : 50%"
+    power = []
+    powerbh6 = [50,60,20,55,60]
+    powerbh3 = [50, 55, 20, 35, 40]
+    arrange1 = "regular"
+    arrange2 = "regular"
+    area1 = "BH-6"
+    bh6 = [1, 1, 0, 0, 0]
+    bh6r = bh6
+    bh6e = [1,0,1,0,1]
+    bh3 = [0, 0, 1, 1, 1]
+    newpow = []
+    bh3r = bh3
+    bh3e = [1,0,1,0,1]
+    resfinl = ["Status Ok","Status Ok","Status Ok","Status Ok","Status Ok"]
+    timeset1 = ""
+    timerise1 = ""
+    timenow = datetime.strptime(datetime.now().strftime("%H:%M:%S %p"),"%H:%M:%S %p").time()
+    timenow = timedelta(hours=timenow.hour,minutes=timenow.minute)
+    r = requests.get('https://api.sunrise-sunset.org/json?lat=31.326015&lng=75.576180&date=today')
+    x = r.json()
+    timerise = (datetime.strptime(x['results']['sunrise'], "%H:%M:%S %p").time())
+    timerise1 = timedelta(hours=timerise.hour, minutes=timerise.minute) + timedelta(hours=5, minutes=30)
+    timeset = (datetime.strptime(x['results']['sunset'], "%H:%M:%S %p").time())
+    timeset1 = timedelta(hours=timeset.hour, minutes=timeset.minute) + timedelta(hours=5, minutes=30)
+    print(timenow)
+    if request.method=="POST":
+        area = request.form["area"]
+        arrange = request.form["arrange"]
+        area1 = request.form["area1"]
+        arrange1 = request.form["arrange1"]
+        # print(request.form["area"])
+        #print(timeset1)
+        if((timenow>timerise1) and (timenow<timeset1)):
+            power = [0, 0, 0, 0, 0]
+            res = []
+            if ((timenow > timerise1) and (timenow < timeset1) and traffic > 50):
+                den = "Traffic Density is High"
+            if(area=="BH-6"):
+                for i in range(0,5):
+                    if(bh6[i]==1):
+                        res.append("Status Error")
+                    else:
+                        res.append("Status Ok")
+                resfinl = res
+            elif(area=="BH-3"):
+                for i in range(0,5):
+                    if(bh3[i]==1):
+                        res.append("Status Error")
+                    else:
+                        res.append("Status Ok")
+                resfinl = res
+        elif((timenow>timerise1 and timenow>timeset1) or (timenow<timerise1 and timenow<timeset1)):
+            if (area1 == "BH-3" and arrange1 == "even"):
+                bh3 = bh3e
+                arrange2 = arrange1
+                powerbh3 = [50,0,50,0,50]
+            elif(area1 == "BH-3" and arrange1 == "regular"):
+                bh3 = bh3r
+            elif (area1 == "BH-6" and arrange1 == "even"):
+                bh6 = bh6e
+                powerbh6 = [50, 0, 50, 0, 50]
+            elif (area1 == "BH-6" and arrange1 == "regular"):
+                bh6 = bh6r
+            res = []
+            if (area == "BH-6"):
+                for i in range(0,5):
+                    if (bh6[i] == 1 and arrange=="regular"):
+                        res.append("Status Ok")
+                    if(bh6[i] == 0 and arrange=="regular"):
+                        res.append("Status Error")
+                    if(arrange=="even" and i%2==0 and bh6[i]==1):
+                        res.append("Status Ok")
+                    if(arrange=="even" and i%2==0 and bh6[i]==0):
+                        res.append("Status Error")
+                    if (arrange == "even" and i % 2 != 0 and bh6[i] == 1):
+                        res.append("Status Error")
+                    if (arrange == "even" and i % 2 != 0 and bh6[i] == 0):
+                        res.append("Status Ok")
+                resfinl = res
+
+            elif (area == "BH-3"):
+                for i in range(0,5):
+                    if (bh3[i] == 1 and arrange == "regular"):
+                        res.append("Status Ok")
+                    if (bh3[i] == 0 and arrange == "regular"):
+                        res.append("Status Error")
+                    if (arrange == "even" and i % 2 == 0 and bh3[i] == 1):
+                        res.append("Status Ok")
+                    if (arrange == "even" and i % 2 == 0 and bh3[i] == 0):
+                        res.append("Status Error")
+                    if (arrange == "even" and i % 2 != 0 and bh3[i] == 1):
+                        res.append("Status Error")
+                    if (arrange == "even" and i % 2 != 0 and bh3[i] == 0):
+                        res.append("Status Ok")
+
+        if(area=="BH-6"):
+            power = powerbh6
+        else:
+            power = powerbh3
+
+            if (traffic > 50):
+                den = "Traffic Density is High"
+                bright = "Adjusting Lights to 70%"
+                newpow = []
+                for i in range(0, 5):
+                    newpow.append(power[i] * 2)
+                power = newpow
+
+            elif ((timenow < timerise1 and timenow < timeset1) and traffic <= 50):
+                bright = "Adjusting Lights to 40%"
+                newpow = []
+                for i in range(0, 5):
+                    newpow.append(power[i] * 2)
+                power = newpow
+                resfinl = res
+    return render_template("dashboard.html",res=resfinl,arrange1=arrange1,arrange2 = arrange2,area1=area1,power=power,labels=labels,colors=colors,msg=msg,den = den,bright=bright)
+
+if(__name__) == "__main__":
+    app.run(debug=True)
+
+
+    # [
+    #     ['Task', 'Hours per Day'],
+    #     ['Work', 8],
+    #     ['Eat', 2],
+    #     ['TV', 4],
+    #     ['Gym', 2],
+    #     ['Sleep', 8]
+    # ]
